@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "rag-search"
+version = "0.1.0"
+description = "A GenAI-powered search engine using GPT + retrieval augmented generation"
+authors = ["Matthew Habtezgi <mhbtz@mit.edu>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.114.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
