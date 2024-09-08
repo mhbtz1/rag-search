@@ -1,15 +1,20 @@
 import { useState } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
-import './App.css'
+import Search from './components/search'
 
 function App() {
   const [count, setCount] = useState(0)
 
   return (
     <>
-      <div className="flex w-[200em] h-[200em] border border-black p-4">
-         <p> Hello, world! </p>
+      <div>
+        <div className="flex justify-center items-center w-[90vw] h-[2em] p-5 mt-10 mb-40 text-15 text-black border-2 border-black">
+          <p> Matthew's Search Engine </p>
+        </div> 
+        <div className="flex justify-center mb-50">
+          <Search/>
+        </div>
       </div>
     </>
   )
