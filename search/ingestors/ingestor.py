@@ -1,3 +1,4 @@
+import io
 import uuid
 from abc import ABC, abstractmethod
 from typing import List, Optional
@@ -14,7 +15,7 @@ class Ingestor(ABC):
         pass
 
     @abstractmethod
-    def parse(self, document_path: str, strategy: str):
+    def parse(self, document_path: str, document_content: io.BytesIO, strategy: str):
         pass
 
     @abstractmethod
@@ -29,7 +30,10 @@ class PDFIngestor(Ingestor):
         self.model_settings = SentenceEmbeddingConfiguration()
         self.os_executor = OSExecutor()
 
-    def parse(self, document_path: str, strategy: str):
+    def parse(self, document_path: str, document_content: io.BytesIO, strategy: str):
+        if not (document_path or document_content):
+            raise Exception()
+        
         elements = partition_pdf(
             document_path,
             strategy=strategy,
@@ -96,7 +100,10 @@ class DocxIngestor(Ingestor):
     def __init__():
         pass
 
-    def parse(self, document_path: str, strategy: str):
+    def parse(self, document_path: str, document_content: io.BytesIO, strategy: str):
+        if not (document_path or document_content):
+            raise Exception()
+        
         elements = partition_pdf(
             document_path,
             strategy=strategy,
@@ -125,13 +132,22 @@ class CSVIngestor(Ingestor):
     def __init__():
         pass
 
-    def parse(self, document_path: str, strategy: str):
+    def parse(self, document_path: str, document_content: io.BytesIO, strategy: str):
+        if not (document_path or document_content):
+            raise Exception()
+        
+
         elements = partition_pdf(
             document_path,
             strategy=strategy,
             infer_table_structure=True,
-            extrat_images_in_pdf=True
-        )
+            extract_images_in_pdf=True
+        ) if document_path else partition_pdf(
+            document_content,
+            strategy=strategy,
+            infer_table_structure=True,
+            extract_images_in_pdf=True
+        ) 
         
         chunks = chunk_by_title(
             elements,

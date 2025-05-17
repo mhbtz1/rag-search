@@ -1,9 +1,13 @@
-from fastapi import FastAPI, APIRouter, Request, Response, Body, HTTPException
+import io
+import json
+from fastapi import FastAPI, APIRouter, Request, Response, Body, Form, HTTPException, Depends, File
 from fastapi import UploadFile
 from fastapi.responses import JSONResponse 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Annotated, Dict, Optional
 from osearch.cluster import OSExecutor
+from ingestors.ingestor import PDFIngestor, DocxIngestor, CSVIngestor
+
 from .config import ServerConfiguration
 import logging
 import secrets
@@ -78,8 +82,8 @@ async def login(username: Annotated[str, Body()], password: Annotated[str, Body(
 
 
 @router.post("/items/{item_id}")
-async def test_point(item_id: int, value_one: int = 0, value_two: int = 10):
-    return Response(content={"sum": item_id + value_one + value_two}, headers={"Content-Type": "application/json"}, status_code=200)
+async def test_point(item_id: int, value_one: Annotated[int, Body()] = 0, value_two: Annotated[int, Body()] = 10):
+    return JSONResponse(content={"sum": item_id + value_one + value_two}, headers={"Content-Type": "application/json"}, status_code=200)
 
 
 @router.post("/sift_documents")
@@ -96,9 +100,30 @@ async def available_indices(request: Request):
 
 
 @router.post("/ingest_file")
-async def ingest_file(request: Request, file: UploadFile):
-    pass
+async def ingest_file(request: Request, model_params: str = Form(...), file: UploadFile = File(description="File to ingest further into backend", example="document.pdf")):
+    try:
+        model_params = json.load(model_params)
+        doc_type = ""
+        if file.filename.endswith(".pdf"):
+            doc_type = "pdf"
+            ingestor = PDFIngestor()
+        elif file.filename.endswith(".csv") or file.filename.endswith(".xlsx"):
+            doc_type = "relational"
+            ingestor = CSVIngestor()
+        elif file.filename.endswith(".docx"):
+            doc_type = "docx"
+            ingestor = DocxIngestor()
+        else:
+            return JSONResponse(content={"error": f"File not supported: {file.filename}"}, status_code=400)
+        
+        content = file.file.read()
+        bytes_io = io.BytesIO(content)
+        ingestor.parse(document_content=bytes_io)
+        bytes_io = io.BytesIO(content)
+        ingestor.embed(index=f"{doc_type}-index", model_alias=model_params["model_alias"], document_content=content)
 
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=400)
 
 @router.post("/ingest_files")
 async def batch_ingest_files(request: Request):

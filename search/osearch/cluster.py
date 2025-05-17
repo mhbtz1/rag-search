@@ -13,7 +13,7 @@ class OSExecutor():
         self.os_config = OpensearchConfiguration()
 
         self.client = OpenSearch(
-            hosts=[{"host": "0.0.0.0", "port": 9200}],
+            hosts=[{"host": "localhost", "port": 9200}],
             http_auth=self.os_config.user_config.auth_info,
             http_compress=True,
             use_ssl=True,
@@ -42,7 +42,7 @@ class OSExecutor():
     
     def list_available_indices(self):
         try:
-            indices = self.client.get("*")
+            indices = [idx["index"] for idx in self.client.cat.indices(format="json")]
             logger.info(f"Listed available indices: {indices}")
             return indices
         except Exception as e:
