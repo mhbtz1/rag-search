@@ -1,17 +1,17 @@
 from opensearchpy import OpenSearch
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, CrossEncoder
 from ragatouille import RAGPretrainedModel
 from .osearch.cluster import OSExecutor
 import numpy as np
 
-
 os_executor = OSExecutor()
 
-# Step 2: Load models
-bi_encoder = SentenceTransformer("all-MiniLM-L6-v2")  # fast bi-encoder
-colbert = RAGPretrainedModel.from_pretrained("colbert-ir/colbertv2.0")
+available_strans = ['BAAI/bge-large-en-v1.5', 'all-MiniLM-L6-v2']
 
-# Step 3: Retrieve with OpenSearch
+bi_encoder = SentenceTransformer(available_strans[0])  # fast bi-encoder
+colbert = RAGPretrainedModel.from_pretrained("colbert-ir/colbertv2.0")
+cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+
 def retrieve(query, index_name="docs", top_k=20):
     query_vector = bi_encoder.encode(query).tolist()
     script_query = {

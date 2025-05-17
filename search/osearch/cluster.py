@@ -1,43 +1,67 @@
 import logging
 from opensearchpy import OpenSearch, AsyncOpenSearch
-from typing import Dict
+from configurations.opensearch import OpensearchConfiguration
+from typing import Dict, Optional
 
 logger = logging.getLogger("osearch-logger")
-fh = logging.FileHandler()
+fh = logging.FileHandler(filename="osearch-log.log", mode='a')
 fh.setLevel(logging.INFO)
 logger.addHandler(fh)
 
 class OSExecutor():
     def __init__(self):
+        self.os_config = OpensearchConfiguration()
+
         self.client = OpenSearch(
             hosts=[{"host": "0.0.0.0", "port": 9200}],
-            http_compress=True,
-            use_ssl=True,
-            verify_certs=False
-        )
-        self.async_client = AsyncOpenSearch(
-            hosts=[{"host": "0.0.0.0", "port": 9200}],
+            http_auth=self.os_config.user_config.auth_info,
             http_compress=True,
             use_ssl=True,
             verify_certs=False
         )
 
-    def create_index(self, index: str, mapping: Dict):
-        pass
+    def exists_index(self, index: str):
+        try:
+            result = self.client.indices.exists(index=index)
+            return result
+        except Exception as e:
+            raise e
 
+    def create_index(self, index: str, mapping: Optional[Dict]=None, knn_index: bool = False):
+        if mapping is None:
+            mapping = {}
+
+        if knn_index:
+            mapping.update({"settings": {"index": { "knn": True }}})
+
+        try:
+            self.client.indices.create(index=index, body=mapping)
+            logger.info(f"Created index {index} with the following schema: {mapping}")
+        except Exception as e:
+            raise e
     
     def list_available_indices(self):
-        return self.client.get("*")
+        try:
+            indices = self.client.get("*")
+            logger.info(f"Listed available indices: {indices}")
+            return indices
+        except Exception as e:
+            raise e
 
     def update_index(self, index: str, document_id: int, body: Dict):
         try:
             logger.info(f"Inserting document {document_id} into index {index} with the following content: {body}")
             self.client.index(index=index, document_id=document_id, body=body)
+            logger.info(f"Inserting body {body} with document id {document_id} into index {index}")
         except Exception as e:
             raise e
         
-    def delete_index(self):
-        pass
+    def delete_index(self, index_name: str):
+        try:
+            self.client.indices.delete(index=index_name)
+            logger.info(f"Deleting index {index_name}")
+        except Exception as e:
+            raise e
 
 
 
