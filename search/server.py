@@ -84,13 +84,15 @@ async def test_point(item_id: int, value_one: int = 0, value_two: int = 10):
 
 @router.post("/sift_documents")
 async def sift_documents(request: Request):
-    availab
-
+    pass
 
 @router.get("/available_indices", dependencies=[])
 async def available_indices(request: Request):
     try:
         os_executor = OSExecutor()
+        return JSONResponse(content={"indices": os_executor.list_available_indices()}, status_code=200)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=400)
 
 
 @router.post("/ingest_file")
