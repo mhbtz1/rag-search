@@ -1,12 +1,15 @@
 import logging
 from opensearchpy import OpenSearch, AsyncOpenSearch
 from configurations.opensearch import OpensearchConfiguration
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger("osearch-logger")
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s')
 fh = logging.FileHandler(filename="osearch-log.log", mode='a')
 fh.setLevel(logging.INFO)
+fh.setFormatter(formatter)
 logger.addHandler(fh)
+
 
 class OSExecutor():
     def __init__(self):
@@ -55,7 +58,17 @@ class OSExecutor():
             logger.info(f"Inserting body {body} with document id {document_id} into index {index}")
         except Exception as e:
             raise e
-        
+    
+    def search(self, index: str, body: Dict[str, Any]):
+        try:
+            docs = self.client.search(
+                index=index,
+                body=body
+            )
+            return docs
+        except Exception as e:
+            raise e
+
     def delete_index(self, index_name: str):
         try:
             self.client.indices.delete(index=index_name)

@@ -1,6 +1,7 @@
 import io
 import json
 import asyncio
+import uuid
 from fastapi import FastAPI, APIRouter, Request, Response, Body, Form, HTTPException, Depends, File
 from fastapi import UploadFile
 from fastapi.responses import JSONResponse 
@@ -9,47 +10,37 @@ from typing import Annotated, Dict, List, Optional
 from osearch.cluster import OSExecutor
 from ingestors.ingestor import PDFIngestor, DocxIngestor, CSVIngestor
 from utils.conn import spawn_connection
+from configurations.models import SearchParams
 
-from .config import ServerConfiguration
-import logging
+from config import ServerConfiguration
+from fastapi.middleware.cors import CORSMiddleware
+from engine import Retriever
+from utils.log import logger
 import secrets
 import psycopg2
 
-logger = logging.getLogger("server-log")
-fh = logging.FileHandler(filename="server-log.log", mode="a")
-fh.setLevel(logging.INFO)
-logger.addHandler(fh)
-logger.setLevel(logging.INFO)
 
-prefix = "/search"
+
+prefix = "/retr"
 app = FastAPI(title="Multimodal Search Application",
               docs_url=f"{prefix}/docs")
 
 router = APIRouter(prefix=prefix)
 security = HTTPBearer()
+retriever = Retriever()
 
 
 async def fetch_secret_token(dbconfig: Dict[str, str], username: str, password: str) -> Optional[str]:
     conn = spawn_connection()
 
     with conn.cursor() as cursor:
-        all_tables = cursor.execute("""
-           SELECT table_name from information_schema.tables
-           WHERE table_schema = 'public'
-        """)
-        all_tables = [row[0] for row in cursor.fetchall()]
-        
-        logger.info(f"all tables: {all_tables}")
-        if "users" not in all_tables:
-            logger.info("users table not found. Creating table...")
-            cursor.execute("CREATE TABLE users (username VARCHAR, password VARCHAR, token VARCHAR)")
-            conn.commit()
-        
-        cursor.execute(f"SELECT password, token FROM users WHERE username = '{username}'")
+        cursor.execute("CREATE TABLE IF NOT EXISTS accounts (username VARCHAR, password VARCHAR, token VARCHAR)")
+        conn.commit()
+        cursor.execute("SELECT password, token FROM accounts WHERE username = %s", (username,))
         results = cursor.fetchall()
         if len(results) == 0:
             token = secrets.token_hex(64)
-            cursor.execute(f"INSERT INTO users (username, password, token) VALUES ('{username}', '{password}', '{token}')")
+            cursor.execute("INSERT INTO accounts (username, password, token) VALUES (%s, %s, %s)", (username, password, token,))
             conn.commit()
             return token
         else:
@@ -59,6 +50,20 @@ async def fetch_secret_token(dbconfig: Dict[str, str], username: str, password: 
         
     
     return None
+
+@router.post("/register")
+async def register(username: Annotated[str, Body()], password: Annotated[str, Body()]):
+    try:
+        conn = spawn_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("CREATE TABLE IF NOT EXISTS accounts (username VARCHAR, password VARCHAR, token VARCHAR)")
+            conn.commit()
+            token = str(uuid.uuid4())
+            cursor.execute("INSERT INTO accounts (username, password, token) VALUES (%s, %s, %s)", (username, password, token,))
+            conn.commit()
+        return JSONResponse(content={"token": token}, status_code=200, headers={"Content-Type": "application/json"})
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=400, headers={"Content-Type": "application/json"})
 
 
 @router.post("/login")
@@ -96,8 +101,23 @@ async def available_indices(request: Request):
 
 async def process_single_file(request: Request, model_params: str = Form(...), file: UploadFile = File(description="File to ingest further into backend", example="document.pdf")):
     try:
-        model_params = json.load(model_params)
         doc_type = ""
+        conn = spawn_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("CREATE TABLE IF NOT EXISTS fstatus (filename VARCHAR, status VARCHAR)")
+        conn.commit()
+        cursor.execute("CREATE TABLE IF NOT EXISTS id_map (id INTEGER, filename VARCHAR)")
+        conn.commit()
+
+        cursor.execute("SELECT COUNT(*) FROM fstatus")
+        file_id = cursor.fetchall()[0][0]
+        enhanced_fname = f"{file.filename}-{file_id}"
+
+        cursor.execute("INSERT INTO id_map (id, filename) VALUES (%s, %s)", (file_id, file.filename,))
+        conn.commit()
+        cursor.execute("INSERT INTO fstatus (filename, status) VALUES (%s, %s)", (enhanced_fname, "PENDING",))
+
         if file.filename.endswith(".pdf"):
             doc_type = "pdf"
             ingestor = PDFIngestor()
@@ -112,14 +132,40 @@ async def process_single_file(request: Request, model_params: str = Form(...), f
         
         content = file.file.read()
         bytes_io = io.BytesIO(content)
-        parsed_content = ingestor.parse(document_content=bytes_io)
+        parsed_content = ingestor.parse(document_content=bytes_io, strategy='hi_res')
         bytes_io = io.BytesIO(content)
-        ingestor.embed(index=f"{doc_type}-index", model_alias=model_params["model_alias"], document_content=parsed_content)
 
+        cursor.execute("UPDATE fstatus SET status = 'PARSED' WHERE filename = %s", (enhanced_fname,))
+        conn.commit()
+
+        index = "large-embedding-index"
+        ingestor.embed(index=index, model_alias=model_params, document_content=parsed_content)
+
+        cursor.execute("UPDATE fstatus SET status = 'FINISHED' WHERE filename = %s", (enhanced_fname,))
+        conn.commit()
         return JSONResponse(content={"status": "success"}, status_code=200)
   
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=400)
+
+async def process_single_image(request: Request, model_params: str = Form(...), file: UploadFile = File(...)):
+    pass
+
+
+@router.get("/file_status/{id}")
+async def get_status(id: int):
+    conn = spawn_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT filename FROM id_map WHERE id = %s", (id,))
+            filename = cursor.fetchall()[0][0]
+            enhanced_fname = f"{filename}-{id}"
+            cursor.execute("SELECT status FROM fstatus WHERE filename = %s", (enhanced_fname,))
+            status = cursor.fetchall()[0][0]
+            return JSONResponse(content={"status": status}, status_code=200)
+    except Exception as e:
+        return JSONResponse({"status": str(e)}, status_code=400)
+
 
 @router.post("/ingest_file")
 async def ingest_file(request: Request, model_params: str = Form(...), file: UploadFile = File(...)):
@@ -129,7 +175,6 @@ async def ingest_file(request: Request, model_params: str = Form(...), file: Upl
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=400)
         
-
 @router.post("/ingest_files")
 async def batch_ingest_files(request: Request, model_params: str = Form(...), files: List[UploadFile] = File(...)):
     try:
@@ -137,10 +182,21 @@ async def batch_ingest_files(request: Request, model_params: str = Form(...), fi
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=400)
 
-@router.post("/search")
-async def search_documents(request: Request):
+@router.post("/ingest_image")
+async def ingest_image(request: Request, model_params: str = Form(...), image_file: List[UploadFile] = File(...)):
     pass
 
 
-app.include_router(router)
 
+@router.post("/search")
+async def search_documents(request: Request, search_params: SearchParams):
+    try:
+        logger.info(f"search_params: {str(search_params)}")
+        retriever = Retriever()
+        reranked_docs = retriever.rag_query(query=search_params.query, top_k=search_params.top_k, index=search_params.index)
+        return JSONResponse(content={"documents": reranked_docs}, status_code=200)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=400)
+
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=['*'], allow_headers=["*"])
+app.include_router(router)

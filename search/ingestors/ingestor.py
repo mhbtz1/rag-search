@@ -9,6 +9,7 @@ from unstructured.chunking.title import chunk_by_title
 from unstructured.partition.html import partition_html
 from configurations.models import SentenceEmbeddingConfiguration
 from osearch.cluster import OSExecutor
+from utils.log import logger
 
 class Ingestor(ABC):
     def __init__(self):
@@ -30,59 +31,70 @@ class PDFIngestor(Ingestor):
         self.model_settings = SentenceEmbeddingConfiguration()
         self.os_executor = OSExecutor()
 
-    def parse(self, document_path: str, document_content: io.BytesIO, strategy: str):
+    def parse(self, document_content: io.BytesIO, strategy: str, document_path: Optional[str]=None):
         if not (document_path or document_content):
             raise Exception()
         
         elements = partition_pdf(
-            document_path,
+            file=document_content,
             strategy=strategy,
             infer_table_structure=True,
             extract_images_in_pdf=True
         )
         
-        print(f"elements: {elements}")
-
+        from unstructured.documents.elements import NarrativeText, Text, Title, ListItem, Table
+        
         chunks = chunk_by_title(
-            elements,
+            elements=elements,
             max_characters=1500,
             new_after_n_chars=1200,
             overlap=200
         )
 
-        serialized_chunks = []
-        for chunk in chunks:
-            if chunk.category not in ["Image", "Table"]:
-                serialized_chunks.append(chunk.text)
+        text_chunks = []
         
-        return serialized_chunks
+        for el in chunks:
+            text = el.text.strip()
+            if hasattr(el, "text"):
+                text = el.text.strip()
+                if text:
+                    text_chunks.append(text)
+        
+        logger.info(f"text_chunks: {text_chunks}")
+        return text_chunks
     
 
     def embed(self, index: str, model_alias: str, document_path: Optional[str]=None, document_content: Optional[List[str]]=None, strategy: Optional[str]=None):
         if not (document_path or document_content):
             raise Exception("Make sure to either pass a document or pre-chunked content!")
         
+        logger.info(f"Embedding w/ embedding mode {model_alias} into index {index}")
         if not document_content:
             document_content = self.parse(document_path)
         
-        model = SentenceTransformer(self.model_settings.fetch_model_name(model_alias=model_alias))
+        model_name = "BAAI/bge-large-en-v1.5" if model_alias == "large" else "BAAI/bge-small-en-v1.5"
+        dim = 1024 if model_alias == "large" else 384
+        model = SentenceTransformer(model_name)
+
         for chunk in document_content:
             embedding = model.encode(chunk).tolist()
             if not self.os_executor.exists_index(index=index):
                 mapping = {
+                    "settings": {
+                        "index": {
+                            "knn": True
+                        }
+                    },
                     "mappings": {
                         "properties": {
-                            "document_embedding": {
+                            "chunk_embedding": {
                                 "type": "knn_vector",
-                                "dimension": 1024,
+                                "dimension": dim,
                                 "method": {
                                     "name": "hnsw",
                                     "space_type": "cosinesimil",
                                     "engine": "nmslib"
                                 }
-                            },
-                            "document_id": {
-                                "type": "keyword"
                             },
                             "chunk_id": {
                                 "type": "keyword"

@@ -12,4 +12,10 @@ class SentenceEmbeddingConfiguration(BaseModel):
 
     def fetch_model_dim(self, model_alias: str) -> str:
         return self.available_models[model_alias]["model"]
+    
+
+class SearchParams(BaseModel):
+    top_k: int = 5
+    query: str
+    index: str = "large-embedding-index"
 
