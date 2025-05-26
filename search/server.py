@@ -1,12 +1,14 @@
 import io
 import json
+import asyncio
 from fastapi import FastAPI, APIRouter, Request, Response, Body, Form, HTTPException, Depends, File
 from fastapi import UploadFile
 from fastapi.responses import JSONResponse 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Annotated, Dict, Optional
+from typing import Annotated, Dict, List, Optional
 from osearch.cluster import OSExecutor
 from ingestors.ingestor import PDFIngestor, DocxIngestor, CSVIngestor
+from utils.conn import spawn_connection
 
 from .config import ServerConfiguration
 import logging
@@ -19,22 +21,16 @@ fh.setLevel(logging.INFO)
 logger.addHandler(fh)
 logger.setLevel(logging.INFO)
 
-prefix = "/search_api"
+prefix = "/search"
 app = FastAPI(title="Multimodal Search Application",
               docs_url=f"{prefix}/docs")
 
 router = APIRouter(prefix=prefix)
 security = HTTPBearer()
 
-async def fetch_secret_token(dbconfig: Dict[str, str], username: str, password: str) -> Optional[str]:
-    conn = psycopg2.connect(
-        dbname=dbconfig["dbname"],
-        user="postgres",
-        password="postgres",
-        host=dbconfig["host"],
-        port=dbconfig["port"]
-    )
 
+async def fetch_secret_token(dbconfig: Dict[str, str], username: str, password: str) -> Optional[str]:
+    conn = spawn_connection()
 
     with conn.cursor() as cursor:
         all_tables = cursor.execute("""
@@ -98,9 +94,7 @@ async def available_indices(request: Request):
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=400)
 
-
-@router.post("/ingest_file")
-async def ingest_file(request: Request, model_params: str = Form(...), file: UploadFile = File(description="File to ingest further into backend", example="document.pdf")):
+async def process_single_file(request: Request, model_params: str = Form(...), file: UploadFile = File(description="File to ingest further into backend", example="document.pdf")):
     try:
         model_params = json.load(model_params)
         doc_type = ""
@@ -118,16 +112,35 @@ async def ingest_file(request: Request, model_params: str = Form(...), file: Upl
         
         content = file.file.read()
         bytes_io = io.BytesIO(content)
-        ingestor.parse(document_content=bytes_io)
+        parsed_content = ingestor.parse(document_content=bytes_io)
         bytes_io = io.BytesIO(content)
-        ingestor.embed(index=f"{doc_type}-index", model_alias=model_params["model_alias"], document_content=content)
+        ingestor.embed(index=f"{doc_type}-index", model_alias=model_params["model_alias"], document_content=parsed_content)
 
+        return JSONResponse(content={"status": "success"}, status_code=200)
+  
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=400)
 
+@router.post("/ingest_file")
+async def ingest_file(request: Request, model_params: str = Form(...), file: UploadFile = File(...)):
+    try:
+        response = await process_single_file(request=request, model_params=model_params, file=file)
+        return response
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=400)
+        
+
 @router.post("/ingest_files")
-async def batch_ingest_files(request: Request):
+async def batch_ingest_files(request: Request, model_params: str = Form(...), files: List[UploadFile] = File(...)):
+    try:
+        await asyncio.gather(*[process_single_file(request=request, model_params=model_params, file=file) for file in files])
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=400)
+
+@router.post("/search")
+async def search_documents(request: Request):
     pass
 
 
 app.include_router(router)
+

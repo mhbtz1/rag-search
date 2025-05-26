@@ -70,30 +70,34 @@ class PDFIngestor(Ingestor):
             embedding = model.encode(chunk).tolist()
             if not self.os_executor.exists_index(index=index):
                 mapping = {
-                    "settings": {
-                        "index": {
-                            "knn": True
-                        }
-                    },
                     "mappings": {
                         "properties": {
-                            "embedding": {
+                            "document_embedding": {
                                 "type": "knn_vector",
-                                "dimension": self.model_settings.fetch_model_dim(model_alias=model_alias),
+                                "dimension": 1024,
                                 "method": {
                                     "name": "hnsw",
                                     "space_type": "cosinesimil",
                                     "engine": "nmslib"
                                 }
                             },
-                            "plaintext": {
+                            "document_id": {
+                                "type": "keyword"
+                            },
+                            "chunk_id": {
+                                "type": "keyword"
+                            },
+                            "chunk_text": {
                                 "type": "text"
                             }
                         }
                     }
                 }
                 self.os_executor.create_index(index=index, mapping=mapping)
-                self.os_executor.update_index(index=index, document_id=str(uuid.uuid4()), body = {"embedding": embedding, "plaintext": chunk})
+                chunk_id = str(uuid.uuid4())
+                document_id = str(uuid.uuid4())
+                self.os_executor.update_index(index=index, document_id=document_id, body = {"document_embedding": embedding, "chunk_text": chunk, 
+                                                                                                  "chunk_id": chunk_id, "document_id": document_id})
 
 
 class DocxIngestor(Ingestor): 
@@ -126,8 +130,47 @@ class DocxIngestor(Ingestor):
         return serialized_chunks
     
     def embed(self, index: str, model_alias: str, document_path: Optional[str]=None, document_content: Optional[List[str]]=None, strategy: Optional[str]=None):
-        pass
+        if not (document_path or document_content):
+            raise Exception("Make sure to either pass a document or pre-chunked content!")
+        
+        if not document_content:
+            document_content = self.parse(document_path)
+        
+        model_name = "BAAI/bg-large-en" if model_alias == "large" else "BAAI/bge-small-en"
+        model = SentenceTransformer(model_name)
 
+        for chunk in document_content:
+            embedding = model.encode(chunk).tolist()
+            if not self.os_executor.exists_index(index=index):
+                mapping = {
+                    "mappings": {
+                        "properties": {
+                            "document_embedding": {
+                                "type": "knn_vector",
+                                "dimension": 1024 if model_alias == "large" else 384,
+                                "method": {
+                                    "name": "hnsw",
+                                    "space_type": "cosinesimil",
+                                    "engine": "nmslib"
+                                }
+                            },
+                            "document_id": {
+                                "type": "keyword"
+                            },
+                            "chunk_id": {
+                                "type": "keyword"
+                            },
+                            "chunk_text": {
+                                "type": "text"
+                            }
+                        }
+                    }
+                }
+                self.os_executor.create_index(index=index, mapping=mapping)
+                chunk_id = str(uuid.uuid4())
+                document_id = str(uuid.uuid4())
+                self.os_executor.update_index(index=index, document_id=document_id, body = {"document_embedding": embedding, "chunk_text": chunk, 
+                                                                                                  "chunk_id": chunk_id, "document_id": document_id})
 class CSVIngestor(Ingestor):
     def __init__():
         pass

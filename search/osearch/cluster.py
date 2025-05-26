@@ -51,7 +51,7 @@ class OSExecutor():
     def update_index(self, index: str, document_id: int, body: Dict):
         try:
             logger.info(f"Inserting document {document_id} into index {index} with the following content: {body}")
-            self.client.index(index=index, document_id=document_id, body=body)
+            self.client.index(index=index, id=document_id, body=body)
             logger.info(f"Inserting body {body} with document id {document_id} into index {index}")
         except Exception as e:
             raise e
