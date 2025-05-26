@@ -1,7 +1,7 @@
 version: '3'
 services:
   opensearch-node1:
-    image: opensearchproject/opensearch:latest
+    image: opensearchproject/opensearch:2.19.0
     container_name: opensearch-node1
     ports:
       - "9200:9200"
@@ -24,7 +24,7 @@ services:
     networks:
       - opensearch-net
   opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:latest
+    image: opensearchproject/opensearch-dashboards:2.19.0
     container_name: opensearch-dashboards
     ports:
       - "5601:5601"
@@ -38,8 +38,37 @@ services:
     networks:
       - opensearch-net
 
+  postgres:
+    image: postgres:latest
+    container_name: "postgres_db"
+    ports:
+    - "5432:5432"
+    expose:
+    - 5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres0
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - postgres_init:/var/lib/docker-entrypoint-initdb.d/
+
+  redis:
+    image: redis:latest
+    container_name: "redis_cache"
+    ports:
+    - "6379:6379"
+    expose:
+    - 6379
+
+    volumes:
+    - redis_data:/varlib/rediscache/data
+
 volumes:
   opensearch-data1:
+  postgres_data:
+  postgres_init:
+  redis_data:
 
 networks:
   opensearch-net:
