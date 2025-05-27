@@ -30,7 +30,6 @@ router = APIRouter(prefix=prefix)
 security = HTTPBearer()
 retriever = Retriever()
 
-
 async def fetch_secret_token(dbconfig: Dict[str, str], username: str, password: str) -> Optional[str]:
     conn = spawn_connection()
 
@@ -151,7 +150,7 @@ async def process_single_file(request: Request, model_params: str = Form(...), f
 
 async def process_single_image(request: Request, model_params: str = Form(...), image_file: UploadFile = File(...)):
     try:
-        doc_type = ""
+        logger.info(f"Processing file {image_file.filename} with model alias {model_params}...")
         conn = spawn_connection()
         cursor = conn.cursor()
 
@@ -177,7 +176,11 @@ async def process_single_image(request: Request, model_params: str = Form(...), 
 
         cursor.execute("UPDATE fstatus SET status = 'PARSED' WHERE filename = %s", (enhanced_fname,))
         conn.commit()
-
+        '''
+        logger.info(f"[process_image] embedding: {parsed_content}")
+        logger.info(f"[process_image] embedding type: {type(parsed_content)}")
+        logger.info(f"[process_image] embedding dim: {parsed_content.shape}")
+        '''
         index = "large-image-embedding-index"
         ingestor.index_image_embedding(index=index, model_alias=model_params, image_content=parsed_content)
 
@@ -235,12 +238,14 @@ async def ingest_image(request: Request, model_params: str = Form(...), image_fi
 
 
 @router.post("/search")
-async def search_documents(request: Request, search_params: SearchParams):
+async def multimodal_search(request: Request, search_params: SearchParams):
     try:
-        logger.info(f"search_params: {str(search_params)}")
-        retriever = Retriever()
-        reranked_docs = retriever.rag_query(query=search_params.query, top_k=search_params.top_k, index=search_params.index)
-        return JSONResponse(content={"documents": reranked_docs}, status_code=200)
+        logger.info(f"[multimodal_search] search_params: {str(search_params)}")
+        logger.info("[multimodal_search] Fetching documents...")
+        reranked_docs = retriever.rag_query(query=search_params.query, top_k=search_params.top_k, index=search_params.document_index)
+        logger.info(f"[multimodal_search] Fetching images...")
+        reranked_images = retriever.rag_query(query=search_params.query, top_k=search_params.top_k, index=search_params.image_index)
+        return JSONResponse(content={"documents": reranked_docs, "images": reranked_images}, status_code=200)
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=400)
 

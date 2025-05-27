@@ -5,6 +5,7 @@ from PIL import Image
 from transformers import CLIPProcessor, CLIPModel
 from osearch.cluster import OSExecutor
 from typing import Optional
+from utils.log import logger
 
 class ImageProcessor:
     def __init__(self):
@@ -23,17 +24,20 @@ class ImageProcessor:
 
         inputs = self.processor(images=img, return_tensors="pt")
         outputs = self.model.get_image_features(**inputs)
-        embedding = outputs.detach().numpy()
+        embedding = outputs.detach().numpy().squeeze(axis=0)
         return embedding
 
-    def index_image_embedding(self, model_alias: str, image_path: Optional[str]=None, image_content: Optional[io.BytesIO]=None, caption_text: Optional[str]=None, index: str = "large-image-embedding-index"):
-        if not (image_path or image_content):
+    def index_image_embedding(self, model_alias: str, image_path: Optional[str]=None, image_content: Optional[numpy.ndarray]=None, caption_text: Optional[str]=None, index: str = "large-image-embedding-index"):
+        logger.info(f"Running index_image_embedding on model alias {model_alias}")
+        if (image_path is None) and (image_content is None):
+            logger.info("Both image_path and image_content are null!")
             raise Exception("Both image_path and image_content are null!")
         
         try:
             if not caption_text:
                 caption_text = ""
 
+            logger.info(f"Point 1")
             mapping = {
                 "settings": {
                     "index": {
@@ -44,20 +48,27 @@ class ImageProcessor:
                     "properties": {
                         "image_vector": {
                             "type": "knn_vector",
-                            "dim": 512
+                            "dimension": 512,
+                            "method": {
+                                "name": "hnsw",
+                                "space_type": "cosinesimil",
+                                "engine": "nmslib"
+                            }
                         },
                         "image_id": {"type": "keyword"},
                         "caption": {"type": "text"}
                     }
                 }
             }
-
+            logger.info(f"Point 2")
             if not self.os_executor.exists_index(index=index):
                 self.os_executor.create_index(index=index, mapping=mapping)
 
-            embedding = self.process_image(image_path=image_path, image_content=image_content)
+            logger.info(f"Point 3")
             image_id = str(uuid.uuid4())
-            self.os_executor.update_index(index=index, id=image_id, body = {"image_vector": embedding.tolist(), "image_id": image_id, "caption": caption_text})
+            self.os_executor.update_index(index=index, document_id=image_id, body = {"image_vector": image_content.tolist(), "image_id": image_id, "caption": caption_text})
+            logger.info(f"Point 4")
+
         except Exception as e:
             raise e
         

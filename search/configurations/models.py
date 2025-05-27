@@ -17,5 +17,6 @@ class SentenceEmbeddingConfiguration(BaseModel):
 class SearchParams(BaseModel):
     top_k: int = 5
     query: str
-    index: str = "large-embedding-index"
+    document_index: str = "large-embedding-index"
+    image_index: str = "large-image-embedding-index"
 
