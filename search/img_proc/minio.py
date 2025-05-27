@@ -4,12 +4,6 @@ from minio.error import S3Error
 from osearch.cluster import OSExecutor
 from utils.log import logger
 
-client = Minio(
-    "localhost:9000",
-    access_key="minioadmin",  
-    secret_key="minioadmin", 
-    secure=False
-)
 
 def upload_image(bucket_name: str, image_bytes: io.BytesIO, object_name: str):
     try:

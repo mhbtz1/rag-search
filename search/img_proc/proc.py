@@ -70,7 +70,7 @@ class ImageProcessor:
             upload_image(bucket_name="img_bucket", object_name=obj_name, image_bytes=image_bytes)
             logger.info(f"Point 3")
             image_id = str(uuid.uuid4())
-            self.os_executor.update_index(index=index, document_id=image_id, body = {"image_vector": image_content.tolist(), "image_id": image_id, "caption": caption_text})
+            self.os_executor.update_index(index=index, document_id=image_id, body = {"image_vector": image_content.tolist(), "image_id": image_id, "caption": caption_text, "minio_image_id": f"img-bucket-{obj_name}"})
             logger.info(f"Point 4")
 
         except Exception as e:

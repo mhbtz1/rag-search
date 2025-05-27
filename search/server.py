@@ -14,7 +14,7 @@ from configurations.models import SearchParams
 
 from config import ServerConfiguration
 from fastapi.middleware.cors import CORSMiddleware
-from engine import Retriever
+from engine import Retriever, ImageRetriever
 from utils.log import logger
 from img_proc.proc import ImageProcessor
 import secrets
@@ -29,6 +29,8 @@ app = FastAPI(title="Multimodal Search Application",
 router = APIRouter(prefix=prefix)
 security = HTTPBearer()
 retriever = Retriever()
+image_retriever = ImageRetriever()
+
 
 async def fetch_secret_token(dbconfig: Dict[str, str], username: str, password: str) -> Optional[str]:
     conn = spawn_connection()
@@ -182,7 +184,7 @@ async def process_single_image(request: Request, model_params: str = Form(...), 
         logger.info(f"[process_image] embedding dim: {parsed_content.shape}")
         '''
         index = "large-image-embedding-index"
-        ingestor.index_image_embedding(index=index, model_alias=model_params, image_content=parsed_content)
+        ingestor.index_image_embedding(index=index, model_alias=model_params, image_content=parsed_content, image_bytes=bytes_io)
 
         cursor.execute("UPDATE fstatus SET status = 'FINISHED' WHERE filename = %s", (enhanced_fname,))
         conn.commit()
@@ -214,8 +216,6 @@ async def ingest_image(request: Request, model_params: str = Form(...), image_fi
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=400)
     
-
-
 @router.post("/ingest_file")
 async def ingest_file(request: Request, model_params: str = Form(...), file: UploadFile = File(...)):
     try:
@@ -231,12 +231,6 @@ async def batch_ingest_files(request: Request, model_params: str = Form(...), fi
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=400)
 
-@router.post("/ingest_image")
-async def ingest_image(request: Request, model_params: str = Form(...), image_file: List[UploadFile] = File(...)):
-    pass
-
-
-
 @router.post("/search")
 async def multimodal_search(request: Request, search_params: SearchParams):
     try:
@@ -244,7 +238,7 @@ async def multimodal_search(request: Request, search_params: SearchParams):
         logger.info("[multimodal_search] Fetching documents...")
         reranked_docs = retriever.rag_query(query=search_params.query, top_k=search_params.top_k, index=search_params.document_index)
         logger.info(f"[multimodal_search] Fetching images...")
-        reranked_images = retriever.rag_query(query=search_params.query, top_k=search_params.top_k, index=search_params.image_index)
+        reranked_images = image_retriever.rag_query(query=search_params.query, top_k=search_params.top_k, index=search_params.image_index)
         return JSONResponse(content={"documents": reranked_docs, "images": reranked_images}, status_code=200)
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=400)
