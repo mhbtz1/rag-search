@@ -64,11 +64,25 @@ services:
     volumes:
     - redis_data:/varlib/rediscache/data
 
+  minio:
+    image: minio/minio
+    container_name: minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"  # API port
+      - "9001:9001"  # Web UI
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: Xcaliber#7#
+    volumes:
+      - ./minio-data:/var/lib/minio/data
+
 volumes:
   opensearch-data1:
   postgres_data:
   postgres_init:
   redis_data:
+  minio-data:
 
 networks:
   opensearch-net:
