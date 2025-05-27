@@ -10,3 +10,4 @@ COPY docker-compose.yml /app
 RUN pip install -r search/requirements.txt
 RUN cd search && bash start_server.sh
 RUN docker compose up --build
+EXPOSE 8080

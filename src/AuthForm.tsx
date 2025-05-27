@@ -25,7 +25,7 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
       const data = await res.json();
 
       if (res.ok) {
-        if (mode === 'register' && data.status === 'success') {
+        if (mode === 'register' && data.token) {
           // Proceed even without token; you may generate one server-side later
           onAuthSuccess();
         } else if (mode === 'login' && data.token) {
