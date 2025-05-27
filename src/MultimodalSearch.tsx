@@ -3,28 +3,24 @@ import React, { useState } from 'react';
 
 export default function MultimodalSearch() {
   const [query, setQuery] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [topK, setTopK] = useState('5');
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      setFile(e.target.files[0]);
-    }
-  };
-
   const handleSearch = async () => {
     setLoading(true);
-    const formData = new FormData();
-    formData.append('query', query);
-    if (file) formData.append('file', file);
-
-    const res = await fetch(`${import.meta.env.BASE_URL}/search`, {
+    const res = await fetch(`${import.meta.env.VITE_API_HOST}/search`, {
       method: 'POST',
-      body: formData,
+      body: JSON.stringify({
+        'query': query,
+        'top_k': topK
+      }),
+      headers: {
+        'Content-Type': 'application/json'
+      }
     });
     const data = await res.json();
-    setResults(data.results);
+    setResults(data.documents);
     setLoading(false);
   };
 
@@ -38,12 +34,6 @@ export default function MultimodalSearch() {
         placeholder="Enter text query"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-      />
-
-      <input
-        type="file"
-        className="w-full"
-        onChange={handleFileChange}
       />
 
       <button
@@ -60,7 +50,7 @@ export default function MultimodalSearch() {
             <h2 className="font-semibold">Results:</h2>
             <ul className="list-disc list-inside space-y-1 text-sm">
               {results.map((res, i) => (
-                <li key={i}>{res.title || res}</li>
+                <li key={i} className="text-black">{res.title || res}</li>
               ))}
             </ul>
           </div>

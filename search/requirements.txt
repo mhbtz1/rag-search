@@ -2,3 +2,4 @@ pi_heif
 pdfminer.six
 pdf2image
 unstructured_pytesseract
+gunicorn

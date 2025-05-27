@@ -2,14 +2,7 @@ import logging
 from opensearchpy import OpenSearch, AsyncOpenSearch
 from configurations.opensearch import OpensearchConfiguration
 from typing import Any, Dict, Optional
-
-logger = logging.getLogger("osearch-logger")
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s')
-fh = logging.FileHandler(filename="osearch-log.log", mode='a')
-fh.setLevel(logging.INFO)
-fh.setFormatter(formatter)
-logger.addHandler(fh)
-
+from utils.log import logger
 
 class OSExecutor():
     def __init__(self):
@@ -43,6 +36,13 @@ class OSExecutor():
         except Exception as e:
             raise e
     
+    def count(self, index: str):
+        try:
+            num_entries = self.client.count(index=index)['count']
+            return num_entries
+        except Exception as e:
+            raise e
+
     def list_available_indices(self):
         try:
             indices = [idx["index"] for idx in self.client.cat.indices(format="json")]
@@ -65,6 +65,8 @@ class OSExecutor():
                 index=index,
                 body=body
             )
+            logger.info(f"[search] index: {index}")
+            logger.info(f"[search] body: {body}")
             return docs
         except Exception as e:
             raise e

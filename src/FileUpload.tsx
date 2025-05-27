@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { PaperClipIcon } from '@heroicons/react/20/solid';
+import FileStatusViewer from './FileViewer';
 
 export default function FileUpload() {
   const [file, setFile] = useState<File | null>(null);
@@ -21,8 +22,12 @@ export default function FileUpload() {
 
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('model_params', new Blob([JSON.stringify({model_alias: selectedModel.join(',')})], { type: 'application/json' }));
+    formData.append('model_params', selectedModel);
 
+    console.log("ingest_file payload:")
+    console.log(`file: ${file}`)   
+    console.log(`selectedModel: ${selectedModel}`)
+    
     try {
       const res = await fetch(`${import.meta.env.VITE_API_HOST}/ingest_file`, {
         method: 'POST',
@@ -95,6 +100,8 @@ export default function FileUpload() {
           Submit
         </button>
       </div>
+
+      <FileStatusViewer/>
     </form>
   );
 }

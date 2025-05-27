@@ -32,6 +32,7 @@ class PDFIngestor(Ingestor):
         self.os_executor = OSExecutor()
 
     def parse(self, document_content: io.BytesIO, strategy: str, document_path: Optional[str]=None):
+        logger.info(f"Parsing document with strategy [{strategy}]...")
         if not (document_path or document_content):
             raise Exception()
         
@@ -51,6 +52,7 @@ class PDFIngestor(Ingestor):
             overlap=200
         )
 
+        logger.info(f"[parse] raw chunks: {chunks}")
         text_chunks = []
         
         for el in chunks:
@@ -60,7 +62,7 @@ class PDFIngestor(Ingestor):
                 if text:
                     text_chunks.append(text)
         
-        logger.info(f"text_chunks: {text_chunks}")
+        logger.info(f"[parse] text_chunks: {text_chunks}")
         return text_chunks
     
 
@@ -77,6 +79,7 @@ class PDFIngestor(Ingestor):
         model = SentenceTransformer(model_name)
 
         for chunk in document_content:
+            logger.info(f"[embed] chunk: {chunk}")
             embedding = model.encode(chunk).tolist()
             if not self.os_executor.exists_index(index=index):
                 mapping = {
@@ -106,10 +109,11 @@ class PDFIngestor(Ingestor):
                     }
                 }
                 self.os_executor.create_index(index=index, mapping=mapping)
-                chunk_id = str(uuid.uuid4())
-                document_id = str(uuid.uuid4())
-                self.os_executor.update_index(index=index, document_id=document_id, body = {"document_embedding": embedding, "chunk_text": chunk, 
-                                                                                                  "chunk_id": chunk_id, "document_id": document_id})
+            
+            chunk_id = str(uuid.uuid4())
+            document_id = str(uuid.uuid4())
+            self.os_executor.update_index(index=index, document_id=document_id, body = {"chunk_embedding": embedding, "chunk_text": chunk, 
+                                                                                                  "chunk_id": chunk_id})
 
 
 class DocxIngestor(Ingestor): 
@@ -157,7 +161,7 @@ class DocxIngestor(Ingestor):
                 mapping = {
                     "mappings": {
                         "properties": {
-                            "document_embedding": {
+                            "chunk_embedding": {
                                 "type": "knn_vector",
                                 "dimension": 1024 if model_alias == "large" else 384,
                                 "method": {
@@ -165,9 +169,6 @@ class DocxIngestor(Ingestor):
                                     "space_type": "cosinesimil",
                                     "engine": "nmslib"
                                 }
-                            },
-                            "document_id": {
-                                "type": "keyword"
                             },
                             "chunk_id": {
                                 "type": "keyword"

@@ -16,6 +16,7 @@ from config import ServerConfiguration
 from fastapi.middleware.cors import CORSMiddleware
 from engine import Retriever
 from utils.log import logger
+from img_proc.proc import ImageProcessor
 import secrets
 import psycopg2
 
@@ -110,7 +111,7 @@ async def process_single_file(request: Request, model_params: str = Form(...), f
         cursor.execute("CREATE TABLE IF NOT EXISTS id_map (id INTEGER, filename VARCHAR)")
         conn.commit()
 
-        cursor.execute("SELECT COUNT(*) FROM fstatus")
+        cursor.execute("SELECT COUNT(*) FROM id_map")
         file_id = cursor.fetchall()[0][0]
         enhanced_fname = f"{file.filename}-{file_id}"
 
@@ -148,8 +149,44 @@ async def process_single_file(request: Request, model_params: str = Form(...), f
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=400)
 
-async def process_single_image(request: Request, model_params: str = Form(...), file: UploadFile = File(...)):
-    pass
+async def process_single_image(request: Request, model_params: str = Form(...), image_file: UploadFile = File(...)):
+    try:
+        doc_type = ""
+        conn = spawn_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("CREATE TABLE IF NOT EXISTS fstatus (filename VARCHAR, status VARCHAR)")
+        conn.commit()
+        cursor.execute("CREATE TABLE IF NOT EXISTS id_map (id INTEGER, filename VARCHAR)")
+        conn.commit()
+
+        cursor.execute("SELECT COUNT(*) FROM id_map")
+        file_id = cursor.fetchall()[0][0]
+        enhanced_fname = f"{image_file.filename}-{file_id}"
+
+        cursor.execute("INSERT INTO id_map (id, filename) VALUES (%s, %s)", (file_id, image_file.filename,))
+        conn.commit()
+        cursor.execute("INSERT INTO fstatus (filename, status) VALUES (%s, %s)", (enhanced_fname, "PENDING",))
+
+        ingestor = ImageProcessor()
+
+        content = image_file.file.read()
+        bytes_io = io.BytesIO(content)
+        parsed_content = ingestor.process_image(image_content=bytes_io)
+        bytes_io = io.BytesIO(content)
+
+        cursor.execute("UPDATE fstatus SET status = 'PARSED' WHERE filename = %s", (enhanced_fname,))
+        conn.commit()
+
+        index = "large-image-embedding-index"
+        ingestor.index_image_embedding(index=index, model_alias=model_params, image_content=parsed_content)
+
+        cursor.execute("UPDATE fstatus SET status = 'FINISHED' WHERE filename = %s", (enhanced_fname,))
+        conn.commit()
+        return JSONResponse(content={"status": "success"}, status_code=200)
+  
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=400)
 
 
 @router.get("/file_status/{id}")
@@ -165,6 +202,15 @@ async def get_status(id: int):
             return JSONResponse(content={"status": status}, status_code=200)
     except Exception as e:
         return JSONResponse({"status": str(e)}, status_code=400)
+
+@router.post("/ingest_image")
+async def ingest_image(request: Request, model_params: str = Form(...), image_file: UploadFile = File(...)):
+    try:
+        response = await process_single_image(request=request, model_params=model_params, image_file=image_file)
+        return response
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=400)
+    
 
 
 @router.post("/ingest_file")
