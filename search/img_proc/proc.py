@@ -6,6 +6,7 @@ from transformers import CLIPProcessor, CLIPModel
 from osearch.cluster import OSExecutor
 from typing import Optional
 from utils.log import logger
+from img_proc.minio import upload_image
 
 class ImageProcessor:
     def __init__(self):
@@ -27,7 +28,7 @@ class ImageProcessor:
         embedding = outputs.detach().numpy().squeeze(axis=0)
         return embedding
 
-    def index_image_embedding(self, model_alias: str, image_path: Optional[str]=None, image_content: Optional[numpy.ndarray]=None, caption_text: Optional[str]=None, index: str = "large-image-embedding-index"):
+    def index_image_embedding(self, model_alias: str,  image_bytes: io.BytesIO, image_path: Optional[str]=None, image_content: Optional[numpy.ndarray]=None, caption_text: Optional[str]=None, index: str = "large-image-embedding-index"):
         logger.info(f"Running index_image_embedding on model alias {model_alias}")
         if (image_path is None) and (image_content is None):
             logger.info("Both image_path and image_content are null!")
@@ -56,7 +57,8 @@ class ImageProcessor:
                             }
                         },
                         "image_id": {"type": "keyword"},
-                        "caption": {"type": "text"}
+                        "caption": {"type": "text"},
+                        "minio_image_id": {"type": "keyword"}
                     }
                 }
             }
@@ -64,6 +66,8 @@ class ImageProcessor:
             if not self.os_executor.exists_index(index=index):
                 self.os_executor.create_index(index=index, mapping=mapping)
 
+            obj_name = str(uuid.uuid4())
+            upload_image(bucket_name="img_bucket", object_name=obj_name, image_bytes=image_bytes)
             logger.info(f"Point 3")
             image_id = str(uuid.uuid4())
             self.os_executor.update_index(index=index, document_id=image_id, body = {"image_vector": image_content.tolist(), "image_id": image_id, "caption": caption_text})

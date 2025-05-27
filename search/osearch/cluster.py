@@ -1,5 +1,5 @@
 import logging
-from opensearchpy import OpenSearch, AsyncOpenSearch
+from opensearchpy import OpenSearch
 from configurations.opensearch import OpensearchConfiguration
 from typing import Any, Dict, Optional
 from utils.log import logger

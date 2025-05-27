@@ -1,5 +1,12 @@
 pi_heif
+fastapi
+fastapi[all]
 pdfminer.six
 pdf2image
+unstructured
 unstructured_pytesseract
 gunicorn
+uvicorn
+opensearch-py
+sentence-transformers
+minio
