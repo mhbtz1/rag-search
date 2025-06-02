@@ -2,7 +2,6 @@ version: '3'
 services:
   opensearch-node1:
     image: opensearchproject/opensearch:2.19.0
-    container_name: opensearch-node1
     ports:
       - "9200:9200"
       - "9600:9600"
@@ -25,7 +24,6 @@ services:
       - opensearch-net
   opensearch-dashboards:
     image: opensearchproject/opensearch-dashboards:2.19.0
-    container_name: opensearch-dashboards
     ports:
       - "5601:5601"
     expose:
@@ -40,7 +38,6 @@ services:
 
   postgres:
     image: postgres:latest
-    container_name: "postgres_db"
     ports:
     - "5432:5432"
     expose:
@@ -66,7 +63,6 @@ services:
 
   minio:
     image: minio/minio
-    container_name: minio
     command: server /data --console-address ":9001"
     ports:
       - "9000:9000"  # API port
@@ -77,12 +73,26 @@ services:
     volumes:
       - ./minio-data:/var/lib/minio/data
 
+  # backend:
+  #  build: 
+  #    context: .
+  #  ports:
+  #  - "8080:8080"
+  #  working_dir: /app
+  #  volumes:
+  #  - ./search:/app/search
+  #  -  nltk_data:/root/nltk_data
+  #  command: bash -c "cd search && bash start_server.sh 0.0.0.0 8080"
+  #  expose:
+  #  - 8080
+
 volumes:
   opensearch-data1:
   postgres_data:
   postgres_init:
   redis_data:
   minio-data:
+  nltk_data:
 
 networks:
   opensearch-net:
