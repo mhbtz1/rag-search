@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 
 export default function MultimodalSearch() {
   const [query, setQuery] = useState('');
-  const [topK, setTopK] = useState<string | null>(null);
+  const [topK, setTopK] = useState<string>('');
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 

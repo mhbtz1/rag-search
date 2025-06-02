@@ -4,8 +4,11 @@ fastapi[all]
 pdfminer.six
 pdf2image
 unstructured
+unstructured_inference
+ragatouille==0.0.9
 unstructured_pytesseract
 gunicorn
+psycopg2-binary
 uvicorn
 opensearch-py
 sentence-transformers

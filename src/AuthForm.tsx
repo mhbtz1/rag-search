@@ -14,9 +14,12 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
     e.preventDefault();
 
     const endpoint = mode === 'login' ? 'login' : 'register';
-
+    console.log("VITE_API_HOST:", import.meta.env.VITE_API_HOST);
+    const fullEndpoint = `${import.meta.env.VITE_API_HOST}/${endpoint}`
+    console.log(`fullEndpoint: ${fullEndpoint}`)
+     
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_HOST}/${endpoint}`, {
+      const res = await fetch(fullEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),

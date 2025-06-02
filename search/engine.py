@@ -1,12 +1,16 @@
 from abc import ABC, abstractclassmethod, abstractmethod
+import os
 from minio import Minio
 from opensearchpy import OpenSearch
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from ragatouille import RAGPretrainedModel
 from osearch.cluster import OSExecutor
 from utils.log import logger
-from typing import List
+from typing import List, Dict, Any
+from dotenv import load_dotenv, find_dotenv
 import numpy as np
+
+load_dotenv(find_dotenv(), override=True)
 
 class AbstractRetriever(ABC):
     @abstractmethod
@@ -65,12 +69,14 @@ class Retriever(AbstractRetriever):
         return [rank["content"] for rank in ranked]
 
     def rag_query(self, query: str, index: str, top_k: int = 5):
-        num_entries = self.os_executor.count(index=index)
-        logger.info(f"[rag_query] num_entries: {num_entries}")
-        retrieved_docs = self.retrieve(query=query, index_name=index, top_k=min(top_k * 5, num_entries))
-        logger.info(f"[rag_query] retrieved_docs: {retrieved_docs}")
-        reranked_docs = self.rerank(query, docs=retrieved_docs, top_k=min(top_k, num_entries))
-        return reranked_docs
+        if self.os_executor.exists_index(index=index):
+            num_entries = self.os_executor.count(index=index)
+            logger.info(f"[rag_query] num_entries: {num_entries}")
+            retrieved_docs = self.retrieve(query=query, index_name=index, top_k=min(top_k * 5, num_entries))
+            logger.info(f"[rag_query] retrieved_docs: {retrieved_docs}")
+            reranked_docs = self.rerank(query, docs=retrieved_docs, top_k=min(top_k, num_entries))
+            return reranked_docs
+        return []
     
 class ImageRetriever(AbstractRetriever):
     def __init__(self):
@@ -121,9 +127,9 @@ class ImageRetriever(AbstractRetriever):
 
         responses = []
         for minio_id in top_minio_ids:
-            bucket_name, object_name = minio_id.split('-')
+            bucket_name, object_name = minio_id.split('-') # intuition: have ID just be composed so we can query a blob store efficiently (ex. get_object )
             client = Minio(
-                "localhost:9000",
+                f"{os.environ['MINIO_HOST']}:{os.environ["MINIO_PORT"]}",
                 access_key="admin",
                 secret_key="Xcaliber#7#",
                 secure=False
@@ -134,10 +140,12 @@ class ImageRetriever(AbstractRetriever):
             response.release_conn()
 
     def rag_query(self, query: str, index: str, top_k: int = 5):
-        num_entries = self.os_executor.count(index=index)
-        logger.info(f"[rag_query] num_entries: {num_entries}")
-        retrieved_docs = self.retrieve(query=query, index_name=index, top_k=min(top_k * 5, num_entries))
-        logger.info(f"[rag_query] retrieved_docs: {retrieved_docs}")
-        reranked_docs = self.rerank(query, docs=retrieved_docs, top_k=min(top_k, num_entries))
-        return reranked_docs
+        if self.os_executor.exists_index(index=index):
+            num_entries = self.os_executor.count(index=index)
+            logger.info(f"[rag_query] num_entries: {num_entries}")
+            retrieved_docs: List[Dict[str, Any]] = self.retrieve(query=query, index_name=index, top_k=min(top_k * 5, num_entries))
+            logger.info(f"[rag_query] retrieved_docs: {retrieved_docs}")
+            reranked_docs = self.rerank(query, docs=retrieved_docs, top_k=min(top_k, num_entries))
+            return reranked_docs
+        return []
 

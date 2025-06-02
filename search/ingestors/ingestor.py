@@ -1,4 +1,6 @@
 import io
+import nltk
+# nltk.data.path.append("/root/nltk_data")
 import uuid
 from abc import ABC, abstractmethod
 from typing import List, Optional
@@ -35,7 +37,7 @@ class PDFIngestor(Ingestor):
         logger.info(f"Parsing document with strategy [{strategy}]...")
         if not (document_path or document_content):
             raise Exception()
-        
+
         elements = partition_pdf(
             file=document_content,
             strategy=strategy,

@@ -1,15 +1,19 @@
 import logging
+import os
 from opensearchpy import OpenSearch
 from configurations.opensearch import OpensearchConfiguration
 from typing import Any, Dict, Optional
 from utils.log import logger
+from dotenv import load_dotenv, find_dotenv
+
+load_dotenv(find_dotenv(), override=True)
 
 class OSExecutor():
     def __init__(self):
         self.os_config = OpensearchConfiguration()
 
         self.client = OpenSearch(
-            hosts=[{"host": "localhost", "port": 9200}],
+            hosts=[{"host": os.environ["OPENSEARCH_HOST"], "port": os.environ["OPENSEARCH_PORT"]}],
             http_auth=self.os_config.user_config.auth_info,
             http_compress=True,
             use_ssl=True,

@@ -8,7 +8,7 @@ from utils.log import logger
 def upload_image(bucket_name: str, image_bytes: io.BytesIO, object_name: str):
     try:
         client = Minio(
-            "localhost:9000",
+            "0.0.0.0:9000",
             access_key="admin",  
             secret_key="Xcaliber#7#", 
             secure=False

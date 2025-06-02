@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 
 export default function ChatBox() {
-  const [messages, setMessages] = useState<{ role: 'user' | 'bot'; text: string }[]>([]);
+  const [messages, setMessages] = useState<{role: string, text: string}[]>([]);
   const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
