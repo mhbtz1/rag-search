@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 
+
 export default function MultimodalSearch() {
   const [query, setQuery] = useState('');
   const [topK, setTopK] = useState<string>('');
@@ -26,7 +27,10 @@ export default function MultimodalSearch() {
       }
     });
     const data = await res.json();
-    setResults(data.documents);
+
+    const docs = data.documents || []
+    const image_blobs = docs.map( (x: Uint8Array) => { return new Blob([x], { type: 'image/jpeg' }) })
+    setResults([...data.documents, ...image_blobs]);
     setLoading(false);
   };
 

@@ -2,13 +2,17 @@ from abc import ABC, abstractclassmethod, abstractmethod
 import os
 from minio import Minio
 from opensearchpy import OpenSearch
-from sentence_transformers import SentenceTransformer, CrossEncoder
+from sentence_transformers import SentenceTransformer, CrossEncoder, util
 from ragatouille import RAGPretrainedModel
+import torch
 from osearch.cluster import OSExecutor
 from utils.log import logger
 from typing import List, Dict, Any
 from dotenv import load_dotenv, find_dotenv
+import torch
 import numpy as np
+
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 load_dotenv(find_dotenv(), override=True)
 
@@ -118,27 +122,40 @@ class ImageRetriever(AbstractRetriever):
         logger.info(f"[rerank] docs: {docs}")
 
         minio_ids = [doc["minio_image_id"] for doc in docs]
-        passages = [doc["image_vector"] for doc in docs]
-        ranked_indices = self.colbert.rerank(query=query, documents=passages, k=top_k)
+        passages = [torch.tensor(doc["image_vector"], device=device) for doc in docs]
 
-        logger.info(f"[rerank] ranked_indices: {ranked_indices}")
+
+        query_embedding = torch.tensor(self.bi_encoder.encode(query, convert_to_tensor=True)[:512]).to(device)
+        scores = torch.tensor([util.cos_sim(query_embedding, passage).item() for passage in passages], device=device)
+        _, top_indices = torch.topk(scores, k=top_k)
+        logger.info(f"Top indices: {top_indices}")
         # Retrieve MinIO IDs for the top-ranked documents
-        top_minio_ids = [minio_ids[i] for i in ranked_indices]
+        top_minio_ids = [minio_ids[idx] for idx in top_indices.tolist()]
 
         responses = []
         for minio_id in top_minio_ids:
-            bucket_name, object_name = minio_id.split('-') # intuition: have ID just be composed so we can query a blob store efficiently (ex. get_object )
+            values = minio_id.split('_') # intuition: have ID just be composed so we can query a blob store efficiently (ex. get_object )
+            bucket_name, object_name = values[0], values[1]
+            logger.info(f"Bucket name: {bucket_name}, object_name: {object_name}")
             client = Minio(
-                f"{os.environ['MINIO_HOST']}:{os.environ["MINIO_PORT"]}",
+                f"{os.environ['MINIO_HOST']}:{os.environ['MINIO_PORT']}",
                 access_key="admin",
                 secret_key="Xcaliber#7#",
                 secure=False
             )
             response = client.get_object(bucket_name, object_name)
-            responses.append(response.read())
+            raw_image_bytes = response.read(512)
+            logger.info(f"First 512 bytes: {raw_image_bytes}")
             response.close()
             response.release_conn()
 
+            response = client.get_object(bucket_name, object_name)
+            responses.append(response.read())
+            response.close()
+            response.release_conn()
+        
+        return responses
+    
     def rag_query(self, query: str, index: str, top_k: int = 5):
         if self.os_executor.exists_index(index=index):
             num_entries = self.os_executor.count(index=index)

@@ -67,10 +67,13 @@ class ImageProcessor:
                 self.os_executor.create_index(index=index, mapping=mapping)
 
             obj_name = str(uuid.uuid4())
-            upload_image(bucket_name="img_bucket", object_name=obj_name, image_bytes=image_bytes)
+            logger.info(f"First 512 bytes: {image_bytes.read(512)}")
+            image_bytes.seek(0)
+            upload_image(bucket_name="imgbucket", object_name=obj_name, image_bytes=image_bytes)
             logger.info(f"Point 3")
-            image_id = str(uuid.uuid4())
-            self.os_executor.update_index(index=index, document_id=image_id, body = {"image_vector": image_content.tolist(), "image_id": image_id, "caption": caption_text, "minio_image_id": f"img-bucket-{obj_name}"})
+            minio_image_id=f"imgbucket_{obj_name}"
+            logger.info(f"minio_image_id: {minio_image_id}")
+            self.os_executor.update_index(index=index, document_id=obj_name, body = {"image_vector": image_content.tolist(), "image_id": obj_name, "caption": caption_text, "minio_image_id": minio_image_id})
             logger.info(f"Point 4")
 
         except Exception as e:

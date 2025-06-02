@@ -140,7 +140,7 @@ async def process_single_file(request: Request, model_params: str = Form(...), f
         cursor.execute("UPDATE fstatus SET status = 'PARSED' WHERE filename = %s", (enhanced_fname,))
         conn.commit()
 
-        index = "large-embedding-index"
+        index = f"{model_params}-embedding-index"
         ingestor.embed(index=index, model_alias=model_params, document_content=parsed_content)
 
         cursor.execute("UPDATE fstatus SET status = 'FINISHED' WHERE filename = %s", (enhanced_fname,))
@@ -183,7 +183,7 @@ async def process_single_image(request: Request, model_params: str = Form(...), 
         logger.info(f"[process_image] embedding type: {type(parsed_content)}")
         logger.info(f"[process_image] embedding dim: {parsed_content.shape}")
         '''
-        index = "large-image-embedding-index"
+        index = f"{model_params}-image-embedding-index"
         ingestor.index_image_embedding(index=index, model_alias=model_params, image_content=parsed_content, image_bytes=bytes_io)
 
         cursor.execute("UPDATE fstatus SET status = 'FINISHED' WHERE filename = %s", (enhanced_fname,))
